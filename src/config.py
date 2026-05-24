@@ -12,15 +12,12 @@ load_dotenv()
 LOCAL_PROVIDERS = {"lmstudio", "llama", "qwen", "mistral", "deepseek-local", "gemma"}
 
 # ── Online API key mapping ────────────────────────────────────────────────────
-# Maps runner.py MODELS keys -> environment variable names.
+# Maps run_exp4.py MODELS keys -> environment variable names.
 # Add a new entry here when you add a new online model.
 ENV_MAP = {
-    "gemini":   "GEMINI_API_KEY",
-    "openai":   "OPENAI_API_KEY",
-    "deepseek": "DEEPSEEK_API_KEY",
-    "claude":   "CLAUDE_API_KEY",
-    "grok":     "GROK_API_KEY",
-    "cohere":   "COHERE_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "claude": "CLAUDE_API_KEY",
 }
 
 
@@ -50,10 +47,9 @@ def get_api_key(provider: str) -> str:
     return key
 
 
-# Default model names per provider (used outside of runner.py)
+# Default model names per provider
 DEFAULT_MODELS = {
-    "gemini":   "gemini-2.0-flash",
-    "openai":   "gpt-4o-mini",
-    "deepseek": "deepseek-chat",
-    "claude":   "claude-haiku-4-5-20241022",
+    "gemini": "gemini-2.0-flash",
+    "openai": "gpt-4o-mini",
+    "claude": "claude-haiku-4-5-20241022",
 }

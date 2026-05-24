@@ -1,6 +1,8 @@
 # Multilingual Mental Health — LLM Evaluation Framework
 
-Evaluates LLM depression detection across Arabic, Urdu, and Chinese social media posts. Four experiments: monolingual classification, keyword attribution, cross-lingual consistency, and fresh classification with justification. Supports both cloud APIs and local models via LM Studio.
+Evaluates LLM depression detection across Arabic, Urdu, and Chinese social media posts via **Experiment 4**: fresh classification + written justification, in either few-shot or zero-shot mode. Supports both cloud APIs and local models via LM Studio.
+
+For a step-by-step walkthrough from a fresh clone, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 ---
 
@@ -9,7 +11,6 @@ Evaluates LLM depression detection across Arabic, Urdu, and Chinese social media
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
-#ignore unless specified tor un
 python scripts/prepare_data.py   # creates the 5 000-post eval files
 ```
 
@@ -18,40 +19,20 @@ Open `.env` and fill in the keys for the models you want to use:
 ```
 GEMINI_API_KEY=your-gemini-key-here
 OPENAI_API_KEY=your-openai-key-here
-DEEPSEEK_API_KEY=your-deepseek-key-here
 CLAUDE_API_KEY=your-claude-key-here
 ```
 
-Keys for models you don't use can be left blank. Local models (Llama, Gemma, Qwen) run via LM Studio and need no API key — see the Local Models section below.
+Keys for models you don't use can be left blank. Local models (Llama, Gemma, Qwen, DeepSeek-R1) run via LM Studio and need no API key.
 
 ---
 
-## Running Experiments
+## Running Experiment 4
 
-### Interactive runner (recommended)
-
-```bash
-python scripts/runner.py
-```
-
-Presents a menu: pick an experiment, pick models, pick languages. Handles all four experiments. Every run is **resumable** — restart the same command after a crash and it picks up from the last checkpoint.
-
-```
-Flags:
-  --fresh       Discard partial checkpoints, start from scratch
-  --delay N     Seconds between API calls (default: 1.0)
-  --workers N   Parallel requests per model (default: 1)
-  --limit N     Only process first N samples (sanity check)
-  --prompt KEY  Override the default prompt (see Prompt Versions below)
-```
-
-### Experiment 4 — dedicated CLI
-
-Experiment 4 (fresh classification + justification) has its own scriptable CLI:
+Experiment 4 reclassifies each post from scratch and asks the model to write a 2-4 sentence justification.
 
 ```bash
 # Few-shot, specific models and languages
-python scripts/run_exp4.py --models claude,openai --languages arabic,urdu
+python scripts/run_exp4.py --models claude,openai --languages arabic,urdu --full
 
 # Full 5k dataset (checkpoints every 50 rows, auto-resumes on restart)
 python scripts/run_exp4.py --model claude --language arabic --full
@@ -77,25 +58,22 @@ Flags:
   --debug INDEX           Run one row, print full response, write nothing
 ```
 
+Or run the entire pipeline (preprocessing + Experiment 4 in both modes) in one shot:
+
+```bash
+python run_all.py                          # full pipeline
+python run_all.py --limit 5                # quick smoke test
+python run_all.py --models claude,gemini   # restrict models
+```
+
 ---
 
 ## Utility Scripts
 
 ```bash
-# Rerun entries that came back as error/unclear (Exp 1)
-python scripts/rerun_failed.py
-python scripts/rerun_failed.py --file results/phase2/experiment1/claude_arabic_<ts>.json
-
-# Rerun transient LM Studio failures from an Exp 3 file
-python scripts/rerun_failed_exp3.py --file results/phase2/experiment3/gemma/gemma_chinese_<ts>.json
-
 # Merge Exp 4 classifications into the error-analysis CSVs
 python scripts/merge_exp4.py             # few-shot → {lang}_all_wrong.csv
 python scripts/merge_exp4.py --zeroshot  # zero-shot → {lang}_zeroshot.csv
-
-# Export Exp 1 metrics to a summary CSV
-python scripts/export_metrics.py
-python scripts/export_metrics.py --out results/summary.csv --models gemini,claude,openai
 ```
 
 ---
@@ -104,24 +82,22 @@ python scripts/export_metrics.py --out results/summary.csv --models gemini,claud
 
 | Key | Model | Type |
 |-----|-------|------|
-| `gemini` | Gemini 2.0 Flash | API |
+| `gemini` | Gemini 3.1 Flash Lite | API |
 | `openai` | GPT-4o-mini | API |
-| `deepseek` | DeepSeek Chat | API |
 | `claude` | Claude Haiku 4.5 | API |
 | `llama` | Llama 3.3 8B | Local (LM Studio) |
 | `gemma` | Gemma 4 E2B | Local (LM Studio) |
 | `qwen` | Qwen 3.5 9B | Local (LM Studio) |
+| `deepseek-local` | DeepSeek-R1 0528 Qwen3 8B | Local (LM Studio) |
 
-**Adding a model:** Create a provider class in `src/models/`, add the API key mapping to `src/config.py` and `.env`, then add an entry to the `MODELS` dict in `scripts/runner.py` and `scripts/run_exp4.py`.
+**Adding a model:** Create a provider class in `src/models/`, add the API key mapping to `src/config.py` and `.env`, then add an entry to the `MODELS` dict in `scripts/run_exp4.py`.
 
 **Local models:** Any OpenAI-compatible local inference server works — LM Studio, Ollama, vLLM, llama.cpp, etc. Start the server, then update `"default_model"` for the relevant key in the `MODELS` dict. If the server runs on a different port, add a `"base_url"` field to the entry:
 
 ```python
-# in scripts/runner.py and scripts/run_exp4.py MODELS dict:
-"llama": {"class": LMStudioProvider, "name": "Llama 3.3 8B (Local)",
-          "default_model": "llama3.3:8b",          # model ID as the server reports it
-          "base_url": "http://localhost:11434/v1",  # Ollama default; omit for LM Studio
-          "max_workers": 1, "delay": 0},
+"llama": {"class": LMStudioProvider, "default_model": "llama3.3:8b",
+          "online": False, "workers": 1, "delay": 0.0, "max_tokens": 500,
+          "base_url": "http://localhost:11434/v1"},
 ```
 
 Default ports: LM Studio → `1234`, Ollama → `11434`, vLLM → `8000`, llama.cpp → `8080`.
@@ -132,16 +108,12 @@ Default ports: LM Studio → `1234`, Ollama → `11434`, vLLM → `8000`, llama.
 
 | Key | Used for |
 |-----|----------|
-| `v3_arabic` | Exp 1 — Arabic (default) |
-| `v3` | Exp 1 — Urdu (default) |
-| `v3_chinese` | Exp 1 — Chinese (default) |
-| `v3_arabic_exp2` | Exp 2 — Arabic attribution (default) |
-| `v3_exp2` | Exp 2 — Urdu attribution (default) |
-| `v3_chinese_exp2` | Exp 2 — Chinese attribution (default) |
-| `v3_exp3` | Exp 3 — cross-lingual consistency, all languages (default) |
-| `v1`, `v2` | Older prompt versions, available for comparison |
+| `v3_exp4` | Urdu — few-shot (default) |
+| `v3_arabic_exp4` | Arabic — few-shot (default) |
+| `v3_chinese_exp4` | Chinese — few-shot (default) |
+| `v3_exp4_zeroshot` | Universal zero-shot (all languages) |
 
-All prompts are defined in `evaluation/prompts.py`.
+All prompts are defined in [src/evaluation/prompts.py](src/evaluation/prompts.py).
 
 ---
 
@@ -149,37 +121,30 @@ All prompts are defined in `evaluation/prompts.py`.
 
 ```
 ├── scripts/
-│   ├── runner.py               # Main interactive runner — all 4 experiments
-│   ├── run_exp4.py             # Experiment 4 standalone CLI
 │   ├── prepare_data.py         # Build 5k eval files from raw datasets
-│   ├── merge_exp4.py           # Merge Exp 4 results into error-analysis CSVs
-│   ├── export_metrics.py       # Export Exp 1 metrics to CSV
-│   ├── rerun_failed.py         # Retry error/unclear entries (Exp 1)
-│   └── rerun_failed_exp3.py    # Retry transient failures (Exp 3)
+│   ├── run_exp4.py             # Experiment 4 — fresh classification + justification
+│   └── merge_exp4.py           # Merge Exp 4 results into error-analysis CSVs
 │
 ├── src/                         # Library code (imported by scripts)
 │   ├── evaluation/
 │   │   ├── prompts.py          # All prompt definitions
-│   │   ├── metrics.py          # Accuracy, precision, recall, F1
 │   │   └── parsers.py          # Dataset parsers per language
 │   ├── models/                 # One provider class per LLM
 │   └── config.py               # API key loader (reads from .env)
 │
-├── data/phase2/                # 5k-post eval files (created by prepare_data.py)
+├── data/
+│   ├── raw/                    # Original raw datasets (Arabic + Urdu)
+│   ├── phase2/                 # 5k-post eval files (created by prepare_data.py)
+│   └── all_models_wrong/       # 15-row error-analysis CSVs (Exp 4 input)
 │
-├── results/
-│   ├── all_models_wrong/       # 15-row error-analysis CSVs (Exp 4 input)
-│   └── phase2/
-│       ├── experiment1/
-│       ├── experiment2/
-│       ├── experiment3/
-│       ├── experiment4/                  # 15-row few-shot results
-│       ├── experiment4_zeroshot/
-│       ├── experiment4_full/             # 5k few-shot results
-│       └── experiment4_full_zeroshot/
+├── results/phase2/              # Experiment 4 outputs (timestamped JSONs)
+│   ├── experiment4/                  # 15-row few-shot
+│   ├── experiment4_zeroshot/         # 15-row zero-shot
+│   ├── experiment4_full/             # 5k few-shot
+│   └── experiment4_full_zeroshot/    # 5k zero-shot
 │
-├── visualization/              # Plot generation scripts
-├── archive/                    # Completed one-time scripts (translation pipeline, etc.)
+├── run_all.py                  # One-command pipeline (preprocessing + Exp 4)
+├── INSTRUCTIONS.md             # Step-by-step runbook
 └── .env                        # API keys (not committed)
 ```
 
@@ -187,14 +152,20 @@ All prompts are defined in `evaluation/prompts.py`.
 
 ## Result File Format
 
-Each experiment writes a timestamped JSON to its results directory:
+Each Exp 4 run writes a timestamped JSON to its results directory:
 
 ```json
 {
-  "metadata": { "model": "claude", "language": "arabic", "experiment": 1, "timestamp": "..." },
-  "metrics":  { "accuracy": 0.81, "precision": 0.80, "recall": 0.83, "f1_score": 0.81 },
-  "results":  [ { "index": 0, "post_full": "...", "ground_truth": "depressed", "prediction": "depressed" }, ... ]
+  "metadata": { "model": "claude", "language": "arabic", "timestamp": "..." },
+  "results":  [
+    {
+      "index": 0,
+      "conversation": "...",
+      "translation": "...",
+      "actual_value": "depressed",
+      "exp4_classification": "depressed",
+      "exp4_justification": "..."
+    }
+  ]
 }
 ```
-
-Experiment 4 adds `exp4_classification` and `exp4_justification` fields per entry.

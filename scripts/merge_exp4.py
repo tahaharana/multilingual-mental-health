@@ -1,7 +1,7 @@
 """Merge Experiment 4 JSON outputs into the per-language error-analysis CSVs.
 
 For each language:
-    1. Load results/all_models_wrong/{language}_all_wrong.csv (15-row Exp 2 baseline).
+    1. Load data/all_models_wrong/{language}_all_wrong.csv (15-row baseline).
     2. Scan results/phase2/experiment4/{model}/ for the newest JSON per (model, language).
     3. Join on `index` and insert two columns per model after its _prediction column:
             {model}_exp4_classification
@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 REPO        = Path(__file__).resolve().parent.parent
-CSV_DIR     = REPO / "results" / "all_models_wrong"
+CSV_DIR     = REPO / "data" / "all_models_wrong"
 EXP4_DIR    = REPO / "results" / "phase2" / "experiment4"
 EXP4_ZS_DIR = REPO / "results" / "phase2" / "experiment4_zeroshot"
 LANGUAGES   = ["arabic", "chinese", "urdu"]
@@ -137,7 +137,7 @@ def process_language(language: str, zeroshot: bool = False) -> tuple[int, dict, 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--zeroshot", action="store_true",
-                   help="Merge zero-shot results (experiment4_zeroshot/ → {language}_zeroshot.csv)")
+                   help="Merge zero-shot results (experiment4_zeroshot/ -> {language}_zeroshot.csv)")
     args = p.parse_args()
 
     total_rows = 0

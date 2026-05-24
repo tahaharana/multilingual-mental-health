@@ -1,5 +1,5 @@
 """
-Prepare Phase 2 Experiment 1 sample files.
+Prepare Experiment 4 sample files.
 
 Creates 5 000-post (2 500 depressed + 2 500 normal) evaluation-ready datasets
 for Arabic, Urdu, and Chinese.

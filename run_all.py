@@ -1,13 +1,9 @@
-"""run_all.py — execute the entire pipeline end-to-end.
+"""run_all.py — execute the full pipeline end-to-end.
 
 Steps:
   Step 0 — Setup checks (.env present, Python deps importable)
   Step 1 — Preprocessing  (scripts/prepare_data.py)
-  Step 2 — Experiment 1   (monolingual classification)
-  Step 3 — Experiment 2   (keyword attribution)
-  Step 4 — Experiment 3   (cross-lingual consistency)
-  Step 5 — Experiment 4   (fresh classification + justification; few-shot AND zero-shot)
-  Step 6 — Export summary metrics CSV
+  Step 2 — Experiment 4   (fresh classification + justification; few-shot AND zero-shot)
 
 Usage:
     python run_all.py                              # full pipeline, every model and language
@@ -15,7 +11,7 @@ Usage:
     python run_all.py --languages arabic,urdu      # restrict languages
     python run_all.py --limit 10                   # 10 samples per (model, lang) — sanity check
     python run_all.py --skip 1                     # skip Step 1 (preprocessing)
-    python run_all.py --only 2,5                   # run only Step 2 and Step 5
+    python run_all.py --only 2                     # run only Step 2 (Exp 4)
     python run_all.py --dry-run                    # print the plan, run nothing
 
 Notes:
@@ -34,18 +30,13 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src"))
 
-ALL_MODELS = ["gemini", "openai", "deepseek", "claude",
-              "llama", "qwen", "deepseek-local", "gemma"]
+ALL_MODELS = ["gemini", "openai", "claude", "llama", "qwen", "deepseek-local", "gemma"]
 ALL_LANGUAGES = ["arabic", "urdu", "chinese"]
 
 STEPS = {
     0: "Setup checks",
     1: "Preprocessing",
-    2: "Experiment 1 — Monolingual classification",
-    3: "Experiment 2 — Keyword attribution",
-    4: "Experiment 3 — Cross-lingual consistency",
-    5: "Experiment 4 — Fresh classification + justification",
-    6: "Export summary metrics",
+    2: "Experiment 4 — Fresh classification + justification",
 }
 
 
@@ -94,10 +85,9 @@ def step0_setup_checks(models: list) -> None:
         from dotenv import load_dotenv
         load_dotenv(env_path)
         env_map = {
-            "gemini":   "GEMINI_API_KEY",
-            "openai":   "OPENAI_API_KEY",
-            "deepseek": "DEEPSEEK_API_KEY",
-            "claude":   "CLAUDE_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "claude": "CLAUDE_API_KEY",
         }
         for m in models:
             if m in env_map:
@@ -133,71 +123,10 @@ def step1_preprocess(languages: list, dry_run: bool) -> None:
             run_cmd(cmd)
 
 
-# ── Steps 2-4: Experiments 1/2/3 via runner.py (monkey-patched) ──────────────
+# ── Step 2: Experiment 4 ─────────────────────────────────────────────────────
 
-def _build_args(limit, fresh, workers, delay):
-    """Construct the argparse-style namespace runner.py expects."""
-    class _Args: pass
-    a = _Args()
-    a.fresh   = fresh
-    a.delay   = delay
-    a.workers = workers
-    a.limit   = limit
-    a.prompt  = None
-    return a
-
-
-def _patch_runner(runner, models: list, languages: list) -> None:
-    """Replace runner.py's interactive selectors with pre-supplied values."""
-    runner.select_models = lambda: [m for m in models if m in runner.MODELS]
-    runner.select_languages = (
-        lambda available, label="Experiment 1": [
-            l for l in languages if available.get(l) is not None
-        ]
-    )
-    runner.select_exp1_results = lambda available: list(sorted(available.keys()))
-    runner._confirm = lambda *a, **kw: True
-
-
-def step2_experiment1(models, languages, limit, fresh, workers, delay, dry_run):
+def step2_experiment4(models, languages, limit, fresh, dry_run):
     banner(2, STEPS[2])
-    print(f"\n  Models:     {', '.join(models)}")
-    print(f"  Languages:  {', '.join(languages)}")
-    if dry_run:
-        print(f"\n  (dry-run) skipping Experiment 1")
-        return
-
-    import runner
-    _patch_runner(runner, models, languages)
-    runner.run_experiment1(_build_args(limit, fresh, workers, delay))
-
-
-def step3_experiment2(models, languages, limit, fresh, workers, delay, dry_run):
-    banner(3, STEPS[3])
-    if dry_run:
-        print(f"\n  (dry-run) skipping Experiment 2")
-        return
-
-    import runner
-    _patch_runner(runner, models, languages)
-    runner.run_experiment2(_build_args(limit, fresh, workers, delay))
-
-
-def step4_experiment3(models, languages, limit, fresh, workers, delay, dry_run):
-    banner(4, STEPS[4])
-    if dry_run:
-        print(f"\n  (dry-run) skipping Experiment 3")
-        return
-
-    import runner
-    _patch_runner(runner, models, languages)
-    runner.run_experiment3(_build_args(limit, fresh, workers, delay))
-
-
-# ── Step 5: Experiment 4 ─────────────────────────────────────────────────────
-
-def step5_experiment4(models, languages, limit, fresh, dry_run):
-    banner(5, STEPS[5])
     models_arg = ",".join(models)
     langs_arg  = ",".join(languages)
 
@@ -215,17 +144,6 @@ def step5_experiment4(models, languages, limit, fresh, dry_run):
             print(f"  (dry-run) $ {' '.join(cmd)}")
             continue
         run_cmd(cmd, check=False)  # keep going even if one mode partially fails
-
-
-# ── Step 6: Export summary ───────────────────────────────────────────────────
-
-def step6_export_summary(dry_run: bool) -> None:
-    banner(6, STEPS[6])
-    cmd = [sys.executable, "scripts/export_metrics.py"]
-    if dry_run:
-        print(f"\n  (dry-run) $ {' '.join(cmd)}")
-        return
-    run_cmd(cmd, check=False)
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -248,12 +166,8 @@ def main():
                         help="Process only N samples per (model, lang) — quick sanity check")
     parser.add_argument("--fresh",   action="store_true",
                         help="Discard partial checkpoints; start every step from scratch")
-    parser.add_argument("--workers", type=int, default=1,
-                        help="Parallel API requests per model (Exp 1/2/3)")
-    parser.add_argument("--delay",   type=float, default=1.0,
-                        help="Seconds between API calls (Exp 1/2/3)")
     parser.add_argument("--skip",    default="",
-                        help="Comma-separated step numbers to SKIP (e.g. --skip 1,5)")
+                        help="Comma-separated step numbers to SKIP (e.g. --skip 1)")
     parser.add_argument("--only",    default="",
                         help="Comma-separated step numbers to RUN exclusively (overrides --skip)")
     parser.add_argument("--dry-run", action="store_true",
@@ -285,18 +199,7 @@ def main():
     if should_run(1):
         step1_preprocess(languages, args.dry_run)
     if should_run(2):
-        step2_experiment1(models, languages, args.limit, args.fresh,
-                          args.workers, args.delay, args.dry_run)
-    if should_run(3):
-        step3_experiment2(models, languages, args.limit, args.fresh,
-                          args.workers, args.delay, args.dry_run)
-    if should_run(4):
-        step4_experiment3(models, languages, args.limit, args.fresh,
-                          args.workers, args.delay, args.dry_run)
-    if should_run(5):
-        step5_experiment4(models, languages, args.limit, args.fresh, args.dry_run)
-    if should_run(6):
-        step6_export_summary(args.dry_run)
+        step2_experiment4(models, languages, args.limit, args.fresh, args.dry_run)
 
     print(f"\n{'='*78}")
     print(f"  Pipeline complete.")

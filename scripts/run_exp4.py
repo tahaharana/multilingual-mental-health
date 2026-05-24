@@ -39,7 +39,6 @@ from config import get_api_key  # noqa: E402
 from evaluation.prompts import LANGUAGE_DEFAULT_PROMPTS_EXP4, LANGUAGE_DEFAULT_PROMPTS_EXP4_ZEROSHOT, PROMPTS  # noqa: E402
 from models import (  # noqa: E402
     ClaudeProvider,
-    DeepSeekProvider,
     GeminiProvider,
     LMStudioProvider,
     OpenAIProvider,
@@ -49,7 +48,7 @@ logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=loggin
 log = logging.getLogger("exp4")
 
 # --- directories ---
-CSV_DIR         = REPO / "results" / "all_models_wrong"          # 15-row error-analysis CSVs
+CSV_DIR         = REPO / "data" / "all_models_wrong"             # 15-row error-analysis CSVs
 FULL_DATA_DIR   = REPO / "data" / "phase2"                       # 5k-sample JSONs
 OUT_DIR         = REPO / "results" / "phase2" / "experiment4"
 OUT_DIR_ZS      = REPO / "results" / "phase2" / "experiment4_zeroshot"
